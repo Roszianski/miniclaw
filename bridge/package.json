@@ -1,7 +1,7 @@
 {
-  "name": "nanobot-whatsapp-bridge",
-  "version": "0.1.0",
-  "description": "WhatsApp bridge for nanobot using Baileys",
+  "name": "miniclaw-whatsapp-bridge",
+  "version": "0.2.0",
+  "description": "WhatsApp bridge for miniclaw using Baileys",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

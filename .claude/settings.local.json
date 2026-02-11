@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.openclaw.ai)",
+      "WebFetch(domain:www.simpleclaw.com)",
+      "WebFetch(domain:openclaw.ai)"
+    ]
+  }
+}

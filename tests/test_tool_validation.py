@@ -1,7 +1,8 @@
 from typing import Any
 
-from nanobot.agent.tools.base import Tool
-from nanobot.agent.tools.registry import ToolRegistry
+from miniclaw.agent.tools.base import Tool
+from miniclaw.agent.tools.registry import ToolRegistry
+from miniclaw.config.schema import ToolApprovalConfig
 
 
 class SampleTool(Tool):
@@ -38,6 +39,27 @@ class SampleTool(Tool):
 
     async def execute(self, **kwargs: Any) -> str:
         return "ok"
+
+
+class ApplyPatchSampleTool(Tool):
+    @property
+    def name(self) -> str:
+        return "apply_patch"
+
+    @property
+    def description(self) -> str:
+        return "patch tool"
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {"patch": {"type": "string"}},
+            "required": ["patch"],
+        }
+
+    async def execute(self, **kwargs: Any) -> str:
+        return "patched"
 
 
 def test_validate_params_missing_required() -> None:
@@ -86,3 +108,31 @@ async def test_registry_returns_validation_error() -> None:
     reg.register(SampleTool())
     result = await reg.execute("sample", {"query": "hi"})
     assert "Invalid parameters" in result
+
+
+async def test_registry_unclassified_tool_defaults_to_allow() -> None:
+    reg = ToolRegistry(
+        approval_config=ToolApprovalConfig(
+            exec="always_ask",
+            browser="always_ask",
+            web_fetch="always_ask",
+            write_file="always_ask",
+        )
+    )
+    reg.register(SampleTool())
+    result = await reg.execute("sample", {"query": "hello", "count": 2})
+    assert result == "ok"
+
+
+async def test_registry_apply_patch_uses_write_file_approval_mode() -> None:
+    reg = ToolRegistry(
+        approval_config=ToolApprovalConfig(
+            exec="always_allow",
+            browser="always_allow",
+            web_fetch="always_allow",
+            write_file="always_ask",
+        )
+    )
+    reg.register(ApplyPatchSampleTool())
+    result = await reg.execute("apply_patch", {"patch": "*** Begin Patch\n*** End Patch"})
+    assert "denied" in result

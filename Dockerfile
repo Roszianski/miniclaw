@@ -16,12 +16,12 @@ WORKDIR /app
 
 # Install Python dependencies first (cached layer)
 COPY pyproject.toml README.md LICENSE ./
-RUN mkdir -p nanobot bridge && touch nanobot/__init__.py && \
+RUN mkdir -p miniclaw bridge && touch miniclaw/__init__.py && \
     uv pip install --system --no-cache . && \
-    rm -rf nanobot bridge
+    rm -rf miniclaw bridge
 
 # Copy the full source and install
-COPY nanobot/ nanobot/
+COPY miniclaw/ miniclaw/
 COPY bridge/ bridge/
 RUN uv pip install --system --no-cache .
 
@@ -31,10 +31,13 @@ RUN npm install && npm run build
 WORKDIR /app
 
 # Create config directory
-RUN mkdir -p /root/.nanobot
+RUN mkdir -p /root/.miniclaw
 
-# Gateway default port
-EXPOSE 18790
+# Persist data across container restarts
+VOLUME /root/.miniclaw
 
-ENTRYPOINT ["nanobot"]
+# Gateway default port + dashboard port
+EXPOSE 18790 18791
+
+ENTRYPOINT ["miniclaw"]
 CMD ["status"]

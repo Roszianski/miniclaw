@@ -9,11 +9,15 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
+import { mkdir, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { homedir } from 'os';
 
 const VERSION = '0.1.0';
 
@@ -22,6 +26,9 @@ export interface InboundMessage {
   sender: string;
   pn: string;
   content: string;
+  quotedId?: string;
+  mediaPath?: string;
+  mediaType?: string;
   timestamp: number;
   isGroup: boolean;
 }
@@ -37,13 +44,15 @@ export class WhatsAppClient {
   private sock: any = null;
   private options: WhatsAppClientOptions;
   private reconnecting = false;
+  private logger = pino({ level: 'silent' });
+  private mediaDir = process.env.MEDIA_DIR || join(homedir(), '.miniclaw', 'media');
+  private recentMessages: Map<string, any> = new Map();
 
   constructor(options: WhatsAppClientOptions) {
     this.options = options;
   }
 
   async connect(): Promise<void> {
-    const logger = pino({ level: 'silent' });
     const { state, saveCreds } = await useMultiFileAuthState(this.options.authDir);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -53,12 +62,12 @@ export class WhatsAppClient {
     this.sock = makeWASocket({
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, logger),
+        keys: makeCacheableSignalKeyStore(state.keys, this.logger),
       },
       version,
-      logger,
+      logger: this.logger,
       printQRInTerminal: false,
-      browser: ['nanobot', 'cli', VERSION],
+      browser: ['miniclaw', 'cli', VERSION],
       syncFullHistory: false,
       markOnlineOnConnect: false,
     });
@@ -116,8 +125,15 @@ export class WhatsAppClient {
         // Skip status updates
         if (msg.key.remoteJid === 'status@broadcast') continue;
 
-        const content = this.extractMessageContent(msg);
-        if (!content) continue;
+        const extracted = await this.extractMessageContent(msg);
+        if (!extracted) continue;
+        if (msg.key.remoteJid && msg.key.id) {
+          this.recentMessages.set(`${msg.key.remoteJid}:${msg.key.id}`, msg);
+          if (this.recentMessages.size > 5000) {
+            const first = this.recentMessages.keys().next().value as string | undefined;
+            if (first) this.recentMessages.delete(first);
+          }
+        }
 
         const isGroup = msg.key.remoteJid?.endsWith('@g.us') || false;
 
@@ -125,7 +141,10 @@ export class WhatsAppClient {
           id: msg.key.id || '',
           sender: msg.key.remoteJid || '',
           pn: msg.key.remoteJidAlt || '',
-          content,
+          content: extracted.content,
+          quotedId: extracted.quotedId,
+          mediaPath: extracted.mediaPath,
+          mediaType: extracted.mediaType,
           timestamp: msg.messageTimestamp as number,
           isGroup,
         });
@@ -133,49 +152,96 @@ export class WhatsAppClient {
     });
   }
 
-  private extractMessageContent(msg: any): string | null {
+  private async extractMessageContent(
+    msg: any
+  ): Promise<{ content: string; quotedId?: string; mediaPath?: string; mediaType?: string } | null> {
     const message = msg.message;
     if (!message) return null;
+    const quotedId = message.extendedTextMessage?.contextInfo?.stanzaId || undefined;
 
     // Text message
     if (message.conversation) {
-      return message.conversation;
+      return { content: message.conversation, quotedId };
     }
 
     // Extended text (reply, link preview)
     if (message.extendedTextMessage?.text) {
-      return message.extendedTextMessage.text;
+      return { content: message.extendedTextMessage.text, quotedId };
     }
 
     // Image with caption
-    if (message.imageMessage?.caption) {
-      return `[Image] ${message.imageMessage.caption}`;
+    if (message.imageMessage) {
+      const caption = message.imageMessage.caption || '[Image]';
+      const mediaPath = await this.downloadMedia(msg, message.imageMessage.mimetype || 'image/jpeg', 'image');
+      return { content: caption, quotedId, mediaPath, mediaType: 'image' };
     }
 
     // Video with caption
     if (message.videoMessage?.caption) {
-      return `[Video] ${message.videoMessage.caption}`;
+      return { content: `[Video] ${message.videoMessage.caption}`, quotedId };
     }
 
     // Document with caption
-    if (message.documentMessage?.caption) {
-      return `[Document] ${message.documentMessage.caption}`;
+    if (message.documentMessage) {
+      const caption = message.documentMessage.caption || '[Document]';
+      const mime = message.documentMessage.mimetype || 'application/octet-stream';
+      const mediaPath = await this.downloadMedia(msg, mime, 'document');
+      return { content: caption, quotedId, mediaPath, mediaType: 'document' };
     }
 
     // Voice/Audio message
     if (message.audioMessage) {
-      return `[Voice Message]`;
+      const mime = message.audioMessage.mimetype || 'audio/ogg';
+      const mediaPath = await this.downloadMedia(msg, mime, 'audio');
+      return { content: `[Voice Message]`, quotedId, mediaPath, mediaType: 'audio' };
     }
 
     return null;
   }
 
-  async sendMessage(to: string, text: string): Promise<void> {
+  private async downloadMedia(msg: any, mime: string, kind: string): Promise<string | undefined> {
+    if (!this.sock) return undefined;
+    try {
+      await mkdir(this.mediaDir, { recursive: true });
+      const buffer = await downloadMediaMessage(
+        msg,
+        'buffer',
+        {},
+        { logger: this.logger, reuploadRequest: this.sock.updateMediaMessage }
+      );
+      if (!buffer) return undefined;
+      const ext = (mime.split('/')[1] || 'bin').split(';')[0];
+      const safeExt = ext === 'jpeg' ? 'jpg' : ext;
+      const filename = `${msg.key.id || Date.now()}.${safeExt}`;
+      const filePath = join(this.mediaDir, filename);
+      await writeFile(filePath, buffer as Buffer);
+      return filePath;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async sendMessage(to: string, text: string, replyTo?: string): Promise<void> {
     if (!this.sock) {
       throw new Error('Not connected');
     }
 
+    if (replyTo) {
+      const quoted = this.recentMessages.get(`${to}:${replyTo}`);
+      if (quoted) {
+        await this.sock.sendMessage(to, { text }, { quoted });
+        return;
+      }
+    }
+
     await this.sock.sendMessage(to, { text });
+  }
+
+  async sendPresence(to: string, state: 'composing' | 'paused'): Promise<void> {
+    if (!this.sock) {
+      throw new Error('Not connected');
+    }
+    await this.sock.sendPresenceUpdate(state, to);
   }
 
   async disconnect(): Promise<void> {

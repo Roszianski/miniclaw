@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in nanobot, please report it by:
+If you discover a security vulnerability in miniclaw, please report it by:
 
 1. **DO NOT** open a public GitHub issue
 2. Create a private security advisory on GitHub or contact the repository maintainers
@@ -22,15 +22,16 @@ We aim to respond to security reports within 48 hours.
 
 ```bash
 # ✅ Good: Store in config file with restricted permissions
-chmod 600 ~/.nanobot/config.json
+chmod 600 ~/.miniclaw/config.json
 
 # ❌ Bad: Hardcoding keys in code or committing them
 ```
 
 **Recommendations:**
-- Store API keys in `~/.nanobot/config.json` with file permissions set to `0600`
+- Store API keys in `~/.miniclaw/config.json` with file permissions set to `0600`
 - Consider using environment variables for sensitive keys
-- Use OS keyring/credential manager for production deployments
+- Store skill/API integration secrets in SecretStore (OS keychain on macOS/Linux when available, encrypted file fallback for headless environments)
+- OAuth access/refresh tokens are stored in SecretStore (`oauth:<provider>:token`) rather than plaintext config
 - Rotate API keys regularly
 - Use separate API keys for development and production
 
@@ -67,7 +68,7 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 - ✅ Review all tool usage in agent logs
 - ✅ Understand what commands the agent is running
 - ✅ Use a dedicated user account with limited privileges
-- ✅ Never run nanobot as root
+- ✅ Never run miniclaw as root
 - ❌ Don't disable security checks
 - ❌ Don't run on systems with sensitive data without careful review
 
@@ -82,7 +83,7 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 
 File operations have path traversal protection, but:
 
-- ✅ Run nanobot with a dedicated user account
+- ✅ Run miniclaw with a dedicated user account
 - ✅ Use filesystem permissions to protect sensitive directories
 - ✅ Regularly audit file operations in logs
 - ❌ Don't give unrestricted access to sensitive files
@@ -95,9 +96,10 @@ File operations have path traversal protection, but:
 - Consider using a firewall to restrict outbound connections if needed
 
 **WhatsApp Bridge:**
-- The bridge runs on `localhost:3001` by default
+- The bridge binds to `127.0.0.1:3001` by default
+- `BRIDGE_AUTH_TOKEN` is required in non-development mode
 - If exposing to network, use proper authentication and TLS
-- Keep authentication data in `~/.nanobot/whatsapp-auth` secure (mode 0700)
+- Keep authentication data in `~/.miniclaw/whatsapp-auth` secure (mode 0700)
 
 ### 6. Dependency Security
 
@@ -109,7 +111,7 @@ pip install pip-audit
 pip-audit
 
 # Update to latest secure versions
-pip install --upgrade nanobot-ai
+pip install --upgrade miniclaw-ai
 ```
 
 For Node.js dependencies (WhatsApp bridge):
@@ -123,7 +125,7 @@ npm audit fix
 - Keep `litellm` updated to the latest version for security fixes
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
-- Subscribe to security advisories for nanobot and its dependencies
+- Subscribe to security advisories for miniclaw and its dependencies
 
 ### 7. Production Deployment
 
@@ -133,26 +135,26 @@ For production use:
    ```bash
    # Run in a container or VM
    docker run --rm -it python:3.11
-   pip install nanobot-ai
+   pip install miniclaw-ai
    ```
 
 2. **Use a Dedicated User**
    ```bash
-   sudo useradd -m -s /bin/bash nanobot
-   sudo -u nanobot nanobot gateway
+   sudo useradd -m -s /bin/bash miniclaw
+   sudo -u miniclaw miniclaw gateway
    ```
 
 3. **Set Proper Permissions**
    ```bash
-   chmod 700 ~/.nanobot
-   chmod 600 ~/.nanobot/config.json
-   chmod 700 ~/.nanobot/whatsapp-auth
+   chmod 700 ~/.miniclaw
+   chmod 600 ~/.miniclaw/config.json
+   chmod 700 ~/.miniclaw/whatsapp-auth
    ```
 
 4. **Enable Logging**
    ```bash
    # Configure log monitoring
-   tail -f ~/.nanobot/logs/nanobot.log
+   tail -f ~/.miniclaw/logs/miniclaw.log
    ```
 
 5. **Use Rate Limiting**
@@ -163,7 +165,7 @@ For production use:
 6. **Regular Updates**
    ```bash
    # Check for updates weekly
-   pip install --upgrade nanobot-ai
+   pip install --upgrade miniclaw-ai
    ```
 
 ### 8. Development vs Production
@@ -185,8 +187,9 @@ For production use:
 
 - **Logs may contain sensitive information** - secure log files appropriately
 - **LLM providers see your prompts** - review their privacy policies
-- **Chat history is stored locally** - protect the `~/.nanobot` directory
-- **API keys are in plain text** - use OS keyring for production
+- **Chat history is stored locally** - protect the `~/.miniclaw` directory
+- **Provider API keys in config are plaintext unless you externalize them** (env vars/restricted file perms)
+- **Skill secrets are stored via SecretStore** (keychain by default where available, encrypted file fallback)
 
 ### 10. Incident Response
 
@@ -195,7 +198,7 @@ If you suspect a security breach:
 1. **Immediately revoke compromised API keys**
 2. **Review logs for unauthorized access**
    ```bash
-   grep "Access denied" ~/.nanobot/logs/nanobot.log
+   grep "Access denied" ~/.miniclaw/logs/miniclaw.log
    ```
 3. **Check for unexpected file modifications**
 4. **Rotate all credentials**
@@ -231,14 +234,14 @@ If you suspect a security breach:
 ⚠️ **Current Security Limitations:**
 
 1. **No Rate Limiting** - Users can send unlimited messages (add your own if needed)
-2. **Plain Text Config** - API keys stored in plain text (use keyring for production)
+2. **Provider Keys in Config** - Provider API keys are stored in config by default unless you externalize them
 3. **No Session Management** - No automatic session expiry
 4. **Limited Command Filtering** - Only blocks obvious dangerous patterns
 5. **No Audit Trail** - Limited security event logging (enhance as needed)
 
 ## Security Checklist
 
-Before deploying nanobot:
+Before deploying miniclaw:
 
 - [ ] API keys stored securely (not in code)
 - [ ] Config file permissions set to 0600
@@ -253,11 +256,11 @@ Before deploying nanobot:
 
 ## Updates
 
-**Last Updated**: 2026-02-03
+**Last Updated**: 2026-02-08
 
 For the latest security updates and announcements, check:
-- GitHub Security Advisories: https://github.com/HKUDS/nanobot/security/advisories
-- Release Notes: https://github.com/HKUDS/nanobot/releases
+- GitHub Security Advisories: https://github.com/HKUDS/miniclaw/security/advisories
+- Release Notes: https://github.com/HKUDS/miniclaw/releases
 
 ## License
 

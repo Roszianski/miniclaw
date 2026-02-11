@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>miniclaw dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['selector', '[data-theme="dark"]'],
+      theme: { extend: { fontFamily: {
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['"SF Mono"', '"Fira Code"', 'monospace'],
+      }}}
+    }
+  </script>
+  <style type="text/tailwindcss">
+    .nav-link {
+      @apply flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 transition-all duration-150 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#1a1d27] outline-none border-l-[3px] border-l-transparent;
+    }
+    .nav-link.active {
+      @apply bg-gray-100 dark:bg-gray-700/50 text-gray-900 dark:text-gray-200 font-medium border-l-[#c96442];
+    }
+    .btn-primary {
+      @apply px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors inline-flex items-center gap-1.5;
+    }
+    .form-input {
+      @apply px-2.5 py-1.5 text-sm bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all;
+    }
+    .tbl-th {
+      @apply text-left px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-100 dark:bg-gray-800/70 border-b-2 border-gray-200 dark:border-gray-600;
+    }
+    .panel-card {
+      @apply border border-gray-200 dark:border-gray-700 rounded-xl p-3 bg-white dark:bg-[#1a1d27] shadow-sm;
+    }
+    .panel-card-scroll {
+      @apply overflow-auto max-h-[70vh];
+    }
+  </style>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="font-sans bg-gray-100 dark:bg-[#0f1117] text-gray-900 dark:text-gray-200 antialiased flex h-screen overflow-hidden">
+
+  <!-- Sidebar -->
+  <nav id="main-sidebar" class="w-56 bg-white dark:bg-[#1a1d27] border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-1 shadow-sm">
+    <h1 class="text-lg font-bold mb-4 text-[#c96442] tracking-wide"><span>🦀 MINICLAW</span></h1>
+    <a href="#" data-page="dashboard" data-tooltip="Dashboard" class="nav-link active">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+      <span class="nav-label">Dashboard</span>
+    </a>
+    <a href="#" data-page="chat" data-tooltip="Chat" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <span class="nav-label">Chat</span>
+    </a>
+    <a href="#" data-page="config" data-tooltip="Config" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="nav-label">Config</span>
+    </a>
+    <a href="#" data-page="sessions" data-tooltip="Sessions" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+      <span class="nav-label">Sessions</span>
+    </a>
+    <a href="#" data-page="audit" data-tooltip="Audit Log" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      <span class="nav-label">Audit Log</span>
+    </a>
+    <a href="#" data-page="skills" data-tooltip="Skills" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+      <span class="nav-label">Skills</span>
+    </a>
+    <a href="#" data-page="workspace" data-tooltip="Workspace" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+      <span class="nav-label">Workspace</span>
+    </a>
+    <a href="#" data-page="memory" data-tooltip="Memory" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><path d="M9 5a2 2 0 012-2h2a2 2 0 012 2v0a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/><path d="M9 12h6m-6 4h6"/></svg>
+      <span class="nav-label">Memory</span>
+    </a>
+    <a href="#" data-page="cron" data-tooltip="Scheduled Tasks" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <span class="nav-label">Scheduled Tasks</span>
+    </a>
+    <a href="#" data-page="heartbeat" data-tooltip="Heartbeat" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+      <span class="nav-label">Heartbeat</span>
+    </a>
+    <a href="#" data-page="approvals" data-tooltip="Approvals" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span class="nav-label">Approvals</span>
+    </a>
+    <a href="#" data-page="status" data-tooltip="Status" class="nav-link">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      <span class="nav-label">Status</span>
+    </a>
+  </nav>
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleSidebarMobile(false)"></div>
+
+  <!-- Main content -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Top bar -->
+    <div class="flex items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700 backdrop-blur-sm bg-white/50 dark:bg-[#1a1d27]/50 gap-3">
+      <button id="sidebar-toggle" onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors cursor-pointer text-gray-500 dark:text-gray-400" aria-label="Toggle sidebar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div id="breadcrumb" class="text-sm text-gray-500 dark:text-gray-400 flex-1">
+        <span class="text-gray-400 dark:text-gray-500">Dashboard</span>
+        <span id="breadcrumb-sep" class="mx-1 text-gray-300 dark:text-gray-600 hidden">/</span>
+        <span id="breadcrumb-page" class="text-gray-700 dark:text-gray-300 hidden"></span>
+      </div>
+      <button onclick="openQuickNav()" class="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 transition-colors cursor-pointer" aria-label="Quick navigation">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <kbd class="font-mono text-[10px] font-medium">&#8984;K</kbd>
+      </button>
+      <button id="tour-btn" onclick="startTour()" class="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 transition-colors cursor-pointer" aria-label="Start guided tour">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+        Tour
+      </button>
+      <button id="theme-toggle" class="p-1.5 rounded-lg cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg id="theme-icon-sun" class="w-[18px] h-[18px] hidden dark:block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg id="theme-icon-moon" class="w-[18px] h-[18px] block dark:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Dashboard</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">At-a-glance overview of your miniclaw instance</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div id="dashboard-status-cards" class="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 mb-6"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div class="panel-card p-4">
+            <div class="text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">Quick Counts</div>
+            <div id="dashboard-counts" class="grid grid-cols-2 gap-3"></div>
+          </div>
+          <div class="panel-card p-4">
+            <div class="text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">Recent Activity</div>
+            <div id="dashboard-recent" class="text-sm text-gray-500 dark:text-gray-400"></div>
+          </div>
+        </div>
+        <div class="text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">Quick Navigation</div>
+        <div id="dashboard-quicknav" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3"></div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div id="page-chat" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center gap-3">
+          <div class="text-lg font-semibold tracking-tight">Chat</div>
+          <span id="chat-status" class="flex items-center"></span>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Talk to the agent in real time</p>
+      </div>
+      <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3"></div>
+      <div class="flex px-6 py-3 gap-2 border-t border-gray-200 dark:border-gray-700">
+        <input id="chat-input" type="text" placeholder="Type a message..." autocomplete="off" aria-label="Type a message"
+               class="flex-1 px-4 py-2.5 bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all">
+        <button onclick="sendChat()" class="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white border-none rounded-xl cursor-pointer text-sm font-medium transition-colors">Send</button>
+      </div>
+    </div>
+
+    <!-- Config -->
+    <div id="page-config" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Configuration</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Edit the bot's configuration file</p>
+        <div class="flex gap-2 mt-2">
+          <button id="config-tab-form" class="config-tab px-3 py-1 text-sm rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer active" onclick="switchConfigTab('form')">Form</button>
+          <button id="config-tab-json" class="config-tab px-3 py-1 text-sm rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer" onclick="switchConfigTab('json')">JSON</button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div id="config-banner" class="hidden mb-4 p-3 rounded-xl text-sm flex items-start gap-2"></div>
+
+        <!-- Form tab -->
+        <div id="config-form-tab" class="flex flex-col gap-3"></div>
+
+        <!-- JSON tab -->
+        <div id="config-json-tab" class="hidden">
+          <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Edit the raw JSON directly. Click Validate to check for errors before saving.</p>
+          <textarea id="config-editor" aria-label="Configuration editor" class="w-full min-h-[400px] bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-200 font-mono text-sm p-4 resize-y outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all"></textarea>
+        </div>
+
+        <div class="flex gap-2 mt-4 pb-12">
+          <button id="btn-validate" class="btn-primary" onclick="validateConfig()">Validate</button>
+          <button id="btn-save-config" class="btn-primary" onclick="saveConfig()">Save Config</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessions -->
+    <div id="page-sessions" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Sessions</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Browse conversation history</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <button class="btn-primary" onclick="loadSessions()">Refresh</button>
+          <span id="sessions-updated" class="text-xs text-gray-400 dark:text-gray-500 ml-auto"></span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="panel-card panel-card-scroll">
+            <div class="table-scroll-wrapper rounded-xl overflow-hidden">
+              <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50 dark:bg-gray-800/50"><th class="tbl-th">Conversation</th><th class="tbl-th">Messages</th><th class="tbl-th">Updated</th></tr></thead>
+                <tbody id="sessions-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel-card panel-card-scroll">
+            <div id="session-detail" class="flex items-center justify-center min-h-[200px]"></div>
+          </div>
+          <div class="panel-card panel-card-scroll flex flex-col gap-3">
+            <div class="flex items-center gap-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Runs</div>
+              <button class="btn-primary ml-auto" onclick="loadRuns()">Refresh</button>
+            </div>
+            <div class="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50 dark:bg-gray-800/50"><th class="tbl-th">Run</th><th class="tbl-th">Status</th><th class="tbl-th">Action</th></tr></thead>
+                <tbody id="runs-body"></tbody>
+              </table>
+            </div>
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Live Run Events</div>
+            <div id="run-events" class="font-mono text-xs whitespace-pre-wrap bg-gray-900 dark:bg-[#0b0d13] text-gray-300 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-[220px] overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div id="page-audit" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Audit Log</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Review all agent activity and tool calls</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+          <button class="btn-primary" onclick="loadAudit()">Refresh</button>
+          <select id="audit-filter" class="form-input text-sm" onchange="filterAudit()" aria-label="Filter by event type">
+            <option value="">All types</option>
+          </select>
+          <span id="audit-updated" class="text-xs text-gray-400 dark:text-gray-500 ml-auto"></span>
+        </div>
+        <div class="table-scroll-wrapper rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-gray-50 dark:bg-gray-800/50">
+              <th class="tbl-th sort-header" onclick="sortAudit('ts')" role="button" aria-label="Sort by time">Time <span id="audit-sort-ts"></span></th>
+              <th class="tbl-th sort-header" onclick="sortAudit('type')" role="button" aria-label="Sort by type">Type <span id="audit-sort-type"></span></th>
+              <th class="tbl-th">Detail</th>
+              <th class="tbl-th">Status</th>
+            </tr></thead>
+            <tbody id="audit-body"></tbody>
+          </table>
+        </div>
+        <div id="audit-pagination" class="flex items-center justify-center gap-3 mt-4 text-sm hidden"></div>
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div id="page-skills" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Skills</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Manage installed agent skills</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex gap-2 flex-wrap mb-4">
+          <input id="skill-source" type="text" placeholder="./my-skill or https://github.com/org/repo" class="form-input flex-1 min-w-[200px]">
+          <input id="skill-name" type="text" placeholder="Optional name" class="form-input">
+          <button id="btn-install-skill" class="btn-primary" onclick="installSkill()">Install</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="panel-card panel-card-scroll">
+            <div class="table-scroll-wrapper rounded-xl overflow-hidden">
+              <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50 dark:bg-gray-800/50"><th class="tbl-th">Name</th><th class="tbl-th">Source</th><th class="tbl-th">Path</th><th class="tbl-th">Actions</th></tr></thead>
+                <tbody id="skills-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel-card panel-card-scroll">
+            <div id="skill-detail" class="flex items-center justify-center min-h-[200px]"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workspace -->
+    <div id="page-workspace" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Workspace</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Edit the agent's identity and behavior files</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
+          <div class="panel-card panel-card-scroll">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Files</div>
+            <div id="workspace-file-list"></div>
+          </div>
+          <div class="panel-card flex flex-col">
+            <div class="flex items-center justify-between mb-2">
+              <div id="workspace-editor-title" class="text-sm font-medium text-gray-700 dark:text-gray-300"></div>
+              <button id="btn-save-workspace" class="btn-primary hidden" onclick="saveWorkspaceFile()">Save</button>
+            </div>
+            <div id="workspace-editor-empty" class="flex items-center justify-center min-h-[200px]"></div>
+            <textarea id="workspace-editor" class="hidden w-full flex-1 min-h-[400px] bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-200 font-mono text-sm p-3 resize-y outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all" aria-label="Workspace editor"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Memory -->
+    <div id="page-memory" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Memory</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">View and edit the agent's persistent memory</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
+          <div class="panel-card panel-card-scroll">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Files</div>
+            <div id="memory-file-list"></div>
+          </div>
+          <div class="panel-card flex flex-col">
+            <div class="flex items-center justify-between mb-2">
+              <div id="memory-editor-title" class="text-sm font-medium text-gray-700 dark:text-gray-300"></div>
+              <div class="flex gap-2">
+                <button id="btn-export-memory" class="btn-primary hidden" onclick="exportMemory()">Export</button>
+                <button id="btn-save-memory" class="btn-primary hidden" onclick="saveMemoryFile()">Save</button>
+              </div>
+            </div>
+            <div id="memory-editor-empty" class="flex items-center justify-center min-h-[200px]"></div>
+            <textarea id="memory-editor" class="hidden w-full flex-1 min-h-[400px] bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-200 font-mono text-sm p-3 resize-y outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all" aria-label="Memory editor"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cron -->
+    <div id="page-cron" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Scheduled Tasks</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Schedule recurring tasks and reminders</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <!-- Task Details card -->
+          <div class="panel-card">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Task Details</div>
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" for="cron-message">Message / task description <span class="text-red-500">*</span></label>
+            <input id="cron-message" type="text" placeholder="e.g. Send daily report" class="form-input w-full mb-2" required>
+            <div class="flex gap-2 items-center">
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" for="cron-kind">Type</label>
+                <select id="cron-kind" class="form-input w-full">
+                  <option value="task">Task</option>
+                  <option value="reminder">Reminder</option>
+                </select>
+              </div>
+              <label class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap mt-4">
+                <input id="cron-isolated" type="checkbox" class="rounded"> Fresh session
+                <span class="tooltip-trigger" data-tip="Run in a fresh session without conversation history" tabindex="0" aria-label="Run in a fresh session without conversation history">?</span>
+              </label>
+            </div>
+          </div>
+          <!-- Schedule card -->
+          <div class="panel-card">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Schedule</div>
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" for="cron-frequency">Frequency</label>
+            <select id="cron-frequency" class="form-input w-full mb-2" onchange="updateCronBuilder()">
+              <option value="minutes">Every X minutes</option>
+              <option value="hourly">Hourly</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="interval">Custom interval (seconds)</option>
+              <option value="cron">Advanced cron expression</option>
+            </select>
+            <div id="cron-builder-fields"></div>
+            <input id="cron-every" type="hidden">
+            <input id="cron-cron" type="hidden">
+            <div id="cron-preview" class="text-xs text-blue-600 dark:text-blue-400 mt-2 min-h-[1.25rem]"></div>
+          </div>
+          <!-- Delivery card -->
+          <div class="panel-card">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Delivery <span class="normal-case font-normal">(optional)</span></div>
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" for="cron-channel">Channel</label>
+            <input id="cron-channel" type="text" placeholder="e.g. whatsapp, telegram" class="form-input w-full mb-2">
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1" for="cron-to">Recipient</label>
+            <input id="cron-to" type="text" placeholder="e.g. +1234567890" class="form-input w-full">
+          </div>
+        </div>
+        <div class="flex mb-4">
+          <button id="btn-add-cron" class="btn-primary" onclick="addCron()">Add Task</button>
+        </div>
+        <div class="table-scroll-wrapper rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-gray-50 dark:bg-gray-800/50"><th class="tbl-th">Name</th><th class="tbl-th">Status</th><th class="tbl-th">Kind</th><th class="tbl-th">Schedule</th><th class="tbl-th">Actions</th></tr></thead>
+            <tbody id="cron-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Heartbeat -->
+    <div id="page-heartbeat" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Heartbeat</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Configure the agent's periodic self-check</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
+          <div class="panel-card panel-card-scroll">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Status</div>
+            <div id="heartbeat-status" class="text-sm text-gray-600 dark:text-gray-300"></div>
+            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <button id="btn-trigger-heartbeat" class="btn-primary" onclick="triggerHeartbeat()">Run Now</button>
+            </div>
+          </div>
+          <div class="panel-card flex flex-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">HEARTBEAT.md</div>
+              <button id="btn-save-heartbeat" class="btn-primary" onclick="saveHeartbeat()">Save</button>
+            </div>
+            <textarea id="heartbeat-editor" class="w-full flex-1 min-h-[400px] bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-200 font-mono text-sm p-3 resize-y outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all" aria-label="Heartbeat editor"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Approvals -->
+    <div id="page-approvals" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-lg font-semibold tracking-tight">Approvals</div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">Review and approve pending agent actions</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div id="approvals-list" class="flex flex-col gap-3"></div>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="page-status" class="page hidden flex-col h-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center gap-3">
+          <div class="text-lg font-semibold tracking-tight">Status</div>
+          <span id="status-updated" class="text-xs text-gray-400 dark:text-gray-500"></span>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-normal mt-0.5">System overview and health</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <div id="status-cards" class="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 mb-4"></div>
+        <div id="status-content" class="text-sm text-gray-600 dark:text-gray-300"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" role="alert" aria-live="polite"></div>
+
+  <!-- Confirm modal -->
+  <div id="confirm-modal" class="fixed inset-0 z-40 hidden items-center justify-center modal-backdrop" role="dialog" aria-modal="true" aria-label="Confirmation">
+    <div class="bg-white dark:bg-[#1a1d27] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-5 max-w-sm w-full mx-4 pointer-events-auto">
+      <div id="confirm-message" class="text-sm text-gray-700 dark:text-gray-300 mb-4"></div>
+      <div class="flex justify-end gap-2">
+        <button id="confirm-cancel" class="btn-primary">Cancel</button>
+        <button id="confirm-ok" class="px-3 py-1.5 text-sm rounded-lg border border-red-300 dark:border-red-500/50 text-red-500 cursor-pointer hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick-nav palette -->
+  <div id="quick-nav-overlay" class="quick-nav-overlay hidden" onclick="if(event.target===this)closeQuickNav()">
+    <div class="quick-nav-panel">
+      <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+        <input id="quick-nav-input" type="text" placeholder="Go to page... (Ctrl+K)" autocomplete="off"
+               class="w-full px-3 py-2 bg-transparent text-sm text-gray-900 dark:text-gray-200 outline-none placeholder-gray-400 dark:placeholder-gray-500"
+               oninput="renderQuickNavList(this.value)">
+      </div>
+      <div id="quick-nav-list" class="max-h-[300px] overflow-y-auto py-1"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
