@@ -117,6 +117,40 @@ def test_skill_secret_requirement_status_api(tmp_path) -> None:
     assert write.json()["values"]["ELEVENLABS_API_KEY"] is True
 
 
+def test_skill_endpoints_reject_invalid_names(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    assert cli_commands._install_builtin_skill(workspace, "weather") is True
+
+    loader = SkillsLoader(workspace=workspace)
+    cfg = Config(agents={"defaults": {"workspace": str(workspace)}})
+    app = create_app(
+        config=cfg,
+        config_path=tmp_path / "config.json",
+        skills_loader=loader,
+        token="t",
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer t"}
+
+    invalid_read = client.get("/api/skills/%2E%2E", headers=headers)
+    assert invalid_read.status_code == 400
+
+    invalid_secrets = client.get("/api/skills/%2E%2E/secrets", headers=headers)
+    assert invalid_secrets.status_code == 400
+
+    source = tmp_path / "custom-skill"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "SKILL.md").write_text("# demo\n", encoding="utf-8")
+
+    invalid_install = client.post(
+        "/api/skills/install",
+        headers=headers,
+        json={"source": str(source), "name": ".."},
+    )
+    assert invalid_install.status_code == 400
+
+
 async def test_whisper_cpp_provider_success(tmp_path) -> None:
     cli = tmp_path / "fake-whisper-cli"
     cli.write_text(

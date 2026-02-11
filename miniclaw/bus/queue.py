@@ -22,7 +22,8 @@ class MessageBus:
         self.outbound: asyncio.Queue[OutboundMessage] = asyncio.Queue()
         self._outbound_subscribers: dict[str, list[Callable[[OutboundMessage], Awaitable[None]]]] = {}
         self._running = False
-        self._response_waiters: dict[str, asyncio.Future[str]] = {}
+        self._response_waiters: dict[str, deque[tuple[asyncio.Future[str], str | None]]] = {}
+        self._response_waiters_by_approval: dict[str, tuple[str, asyncio.Future[str]]] = {}
         self._approval_listeners: list[asyncio.Queue[dict]] = []
         self._run_listeners: list[asyncio.Queue[dict[str, Any]]] = []
         self._steer_listeners: list[asyncio.Queue[dict[str, Any]]] = []
@@ -32,10 +33,10 @@ class MessageBus:
     
     async def publish_inbound(self, msg: InboundMessage) -> None:
         """Publish a message from a channel to the agent."""
-        waiter = self._response_waiters.get(msg.session_key)
-        if waiter and not waiter.done():
-            waiter.set_result(msg.content)
-            self._response_waiters.pop(msg.session_key, None)
+        waiter = self._pop_next_waiter(msg.session_key)
+        if waiter is not None:
+            future, _approval_id = waiter
+            future.set_result(msg.content)
             return
         await self.inbound.put(msg)
     
@@ -51,35 +52,97 @@ class MessageBus:
         """Consume the next outbound message (blocks until available)."""
         return await self.outbound.get()
 
-    async def wait_for_response(self, session_key: str, timeout: float = 60.0) -> str | None:
+    async def wait_for_response(
+        self,
+        session_key: str,
+        timeout: float = 60.0,
+        approval_id: str | None = None,
+    ) -> str | None:
         """Wait for the next inbound message for a given session key."""
-        if session_key in self._response_waiters and not self._response_waiters[session_key].done():
-            return None
+        key = str(session_key or "")
+        approval_key = str(approval_id or "").strip() or None
+        if approval_key:
+            existing = self._response_waiters_by_approval.get(approval_key)
+            if existing and not existing[1].done():
+                return None
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[str] = loop.create_future()
-        self._response_waiters[session_key] = fut
+        queue = self._response_waiters.setdefault(key, deque())
+        queue.append((fut, approval_key))
+        if approval_key:
+            self._response_waiters_by_approval[approval_key] = (key, fut)
         try:
             return await asyncio.wait_for(fut, timeout=timeout)
         except asyncio.TimeoutError:
             return None
         finally:
-            self._response_waiters.pop(session_key, None)
+            self._remove_waiter(key, fut, approval_key)
 
     def submit_response(self, session_key: str, content: str, approval_id: str | None = None) -> bool:
         """Submit a response to a waiting approval without inbound message."""
-        waiter = self._response_waiters.get(session_key)
-        if waiter and not waiter.done():
+        key = str(session_key or "")
+        approval_key = str(approval_id or "").strip() or None
+        if approval_key:
+            match = self._response_waiters_by_approval.get(approval_key)
+            if not match:
+                return False
+            matched_session_key, waiter = match
+            if key and matched_session_key != key:
+                return False
+            if waiter.done():
+                self._remove_waiter(matched_session_key, waiter, approval_key)
+                return False
             waiter.set_result(content)
-            self._response_waiters.pop(session_key, None)
-            if approval_id:
-                self._pending_approvals.pop(approval_id, None)
-            else:
-                self._pending_approvals = {
-                    k: v for k, v in self._pending_approvals.items()
-                    if v.get("session_key") != session_key
-                }
+            self._remove_waiter(matched_session_key, waiter, approval_key)
+            self._pending_approvals.pop(approval_key, None)
+            return True
+
+        next_waiter = self._pop_next_waiter(key)
+        if next_waiter is not None:
+            waiter, _approval = next_waiter
+            waiter.set_result(content)
+            self._pending_approvals = {
+                k: v for k, v in self._pending_approvals.items()
+                if v.get("session_key") != key
+            }
             return True
         return False
+
+    def _pop_next_waiter(self, session_key: str) -> tuple[asyncio.Future[str], str | None] | None:
+        queue = self._response_waiters.get(session_key)
+        if not queue:
+            return None
+        while queue:
+            future, approval_id = queue.popleft()
+            if approval_id:
+                mapped = self._response_waiters_by_approval.get(approval_id)
+                if mapped and mapped[1] is future:
+                    self._response_waiters_by_approval.pop(approval_id, None)
+            if future.done():
+                continue
+            if not queue:
+                self._response_waiters.pop(session_key, None)
+            return future, approval_id
+        self._response_waiters.pop(session_key, None)
+        return None
+
+    def _remove_waiter(
+        self,
+        session_key: str,
+        future: asyncio.Future[str],
+        approval_id: str | None,
+    ) -> None:
+        queue = self._response_waiters.get(session_key)
+        if queue:
+            filtered = deque((f, aid) for f, aid in queue if f is not future)
+            if filtered:
+                self._response_waiters[session_key] = filtered
+            else:
+                self._response_waiters.pop(session_key, None)
+        if approval_id:
+            mapped = self._response_waiters_by_approval.get(approval_id)
+            if mapped and mapped[1] is future:
+                self._response_waiters_by_approval.pop(approval_id, None)
 
     def add_pending_approval(self, event: dict) -> None:
         """Track pending approval request."""

@@ -270,3 +270,34 @@ def test_pairing_request_requires_auth_and_rejects_query_token() -> None:
     )
     assert authorized.status_code == 200
     assert authorized.json()["ok"] is True
+
+
+def test_plugin_endpoints_reject_invalid_name_traversal(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    plugin_src = tmp_path / "plugin-src"
+    plugin_src.mkdir(parents=True, exist_ok=True)
+    (plugin_src / "plugin.json").write_text('{"name":"demo"}', encoding="utf-8")
+
+    cfg = Config()
+    cfg.agents.defaults.workspace = str(workspace)
+
+    app = create_app(
+        config=cfg,
+        config_path=tmp_path / "config.json",
+        token="t",
+        bus=FakeRunBus(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer t"}
+
+    install = client.post(
+        "/api/plugins/install",
+        headers=headers,
+        json={"source": str(plugin_src), "name": ".."},
+    )
+    assert install.status_code == 400
+
+    remove = client.delete("/api/plugins/%2E%2E", headers=headers)
+    assert remove.status_code == 400

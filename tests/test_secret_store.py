@@ -23,7 +23,7 @@ def test_secret_store_file_backend_does_not_store_plaintext(tmp_path) -> None:
     store = SecretStore(namespace="test", backend="file", home=tmp_path)
     value = "top-secret-value"
     store.set("x", value)
-    raw = (tmp_path / ".miniclaw" / "secrets.enc.json").read_text(encoding="utf-8")
+    raw = store._impl.secrets_file.read_text(encoding="utf-8")  # type: ignore[attr-defined]
     assert value not in raw
 
 
@@ -95,7 +95,7 @@ def test_secret_store_uses_master_key_env_for_file_backend(tmp_path, monkeypatch
     store.set("k", "v")
 
     # Key file should still be absent when env master key is supplied.
-    assert not (tmp_path / ".miniclaw" / "secrets.key").exists()
+    assert not store._impl.key_file.exists()  # type: ignore[attr-defined]
     assert store.get("k") == "v"
 
     monkeypatch.delenv("MINICLAW_SECRETS_MASTER_KEY", raising=False)
@@ -118,3 +118,26 @@ def test_scoped_secret_store_isolates_agent_scopes(tmp_path) -> None:
     # OAuth/provider keys remain global by default.
     assert a.set("oauth:openai", "token-a")
     assert b.get("oauth:openai") == "token-a"
+
+
+def test_secret_store_file_backend_isolates_namespaces(tmp_path) -> None:
+    store_a = SecretStore(namespace="alpha", backend="file", home=tmp_path)
+    store_b = SecretStore(namespace="beta", backend="file", home=tmp_path)
+
+    assert store_a.set("shared-key", "value-a") is True
+    assert store_b.get("shared-key") is None
+
+    assert store_b.set("shared-key", "value-b") is True
+    assert store_a.get("shared-key") == "value-a"
+    assert store_b.get("shared-key") == "value-b"
+
+    assert store_a._impl.secrets_file != store_b._impl.secrets_file  # type: ignore[attr-defined]
+    assert store_a._impl.key_file != store_b._impl.key_file  # type: ignore[attr-defined]
+
+
+def test_secret_store_file_backend_falls_back_when_scrypt_missing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("miniclaw.secrets.store.hashlib.scrypt", None, raising=False)
+    store = SecretStore(namespace="test", backend="file", home=tmp_path)
+
+    assert store.set("k", "v") is True
+    assert store.get("k") == "v"

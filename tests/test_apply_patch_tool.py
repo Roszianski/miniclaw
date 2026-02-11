@@ -106,3 +106,18 @@ async def test_apply_patch_respects_allowed_dir(tmp_path: Path) -> None:
 
     result = await tool.execute(patch=patch)
     assert "outside allowed directory" in result
+
+
+async def test_apply_patch_rejects_prefix_sibling_outside_allowed_dir(tmp_path: Path) -> None:
+    allowed = tmp_path / "allowed"
+    allowed.mkdir(parents=True, exist_ok=True)
+
+    sibling = (tmp_path / "allowed_evil" / "outside.txt").resolve()
+    tool = ApplyPatchTool(allowed_dir=allowed)
+    patch = f"""*** Begin Patch
+*** Add File: {sibling}
++oops
+*** End Patch"""
+
+    result = await tool.execute(patch=patch)
+    assert "outside allowed directory" in result

@@ -234,7 +234,11 @@ class ToolRegistry:
             content=content,
         ))
 
-        response = await self._bus.wait_for_response(self._session_key, timeout=self._approval_timeout_s)
+        response = await self._bus.wait_for_response(
+            self._session_key,
+            timeout=self._approval_timeout_s,
+            approval_id=approval_id,
+        )
         self._bus.resolve_pending_approval(approval_id=approval_id, session_key=self._session_key)
         if not response:
             return False

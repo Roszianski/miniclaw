@@ -48,6 +48,25 @@ def create_app(
     app = FastAPI(title="miniclaw dashboard", docs_url=None, redoc_url=None)
     auth = require_token(token)
     plugin_manager = PluginManager(workspace=config.workspace_path, config=config.plugins)
+    safe_name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+    def _normalize_safe_name(value: Any, *, kind: str) -> str:
+        name = str(value or "").strip()
+        if not name:
+            raise ValueError(f"{kind} name is required")
+        if not safe_name_re.fullmatch(name):
+            raise ValueError(
+                f"invalid {kind} name (allowed: letters, numbers, dot, underscore, hyphen)"
+            )
+        return name
+
+    def _resolve_child_path(root: Path, child_name: str, *, kind: str) -> Path:
+        base = root.expanduser().resolve()
+        target = (base / child_name).resolve()
+        if target != base and base not in target.parents:
+            raise ValueError(f"{kind} path resolves outside target directory")
+        return target
+
     recipe_root = Path(config.workflows.path)
     if not recipe_root.is_absolute():
         recipe_root = (config.workspace_path / recipe_root).resolve()
@@ -279,8 +298,12 @@ def create_app(
     async def api_get_skill(name: str):
         if not skills_loader:
             return {"error": "skills not available"}
-        content = skills_loader.load_skill(name) or ""
-        meta = skills_loader.get_skill_metadata(name) or {}
+        try:
+            safe_name = _normalize_safe_name(name, kind="skill")
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        content = skills_loader.load_skill(safe_name) or ""
+        meta = skills_loader.get_skill_metadata(safe_name) or {}
         # Attempt to parse additional metadata if present
         skill_meta = {}
         try:
@@ -292,11 +315,11 @@ def create_app(
         secret_requirements = {"required": [], "present": [], "missing": []}
         if hasattr(skills_loader, "get_secret_requirement_status"):
             try:
-                secret_requirements = skills_loader.get_secret_requirement_status(name)
+                secret_requirements = skills_loader.get_secret_requirement_status(safe_name)
             except Exception:
                 secret_requirements = {"required": [], "present": [], "missing": []}
         return {
-            "name": name,
+            "name": safe_name,
             "metadata": meta,
             "requires": requires,
             "secret_requirements": secret_requirements,
@@ -307,18 +330,22 @@ def create_app(
     async def api_get_skill_secrets(name: str):
         if not skills_loader:
             return {"error": "skills not available"}
+        try:
+            safe_name = _normalize_safe_name(name, kind="skill")
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
 
         required: list[str] = []
         if hasattr(skills_loader, "get_required_env_vars"):
-            required = list(skills_loader.get_required_env_vars(name))
+            required = list(skills_loader.get_required_env_vars(safe_name))
         values: dict[str, bool] = {}
         for env_name in required:
             present = bool(os.environ.get(env_name))
             if not present and secret_store:
                 key = (
-                    skills_loader.secret_key_for(name, env_name)
+                    skills_loader.secret_key_for(safe_name, env_name)
                     if hasattr(skills_loader, "secret_key_for")
-                    else f"skill:{name}:env:{env_name}"
+                    else f"skill:{safe_name}:env:{env_name}"
                 )
                 present = bool(secret_store.has(key))
             values[env_name] = present
@@ -326,7 +353,7 @@ def create_app(
         present_list = [k for k, v in values.items() if v]
         missing_list = [k for k, v in values.items() if not v]
         return {
-            "name": name,
+            "name": safe_name,
             "required": required,
             "values": values,  # masked status only
             "present": present_list,
@@ -340,10 +367,14 @@ def create_app(
             return {"error": "skills not available"}
         if not secret_store:
             return {"error": "secret store unavailable"}
+        try:
+            safe_name = _normalize_safe_name(name, kind="skill")
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
 
         required: list[str] = []
         if hasattr(skills_loader, "get_required_env_vars"):
-            required = list(skills_loader.get_required_env_vars(name))
+            required = list(skills_loader.get_required_env_vars(safe_name))
         allowed = set(required)
 
         secrets_body = body.get("secrets")
@@ -357,16 +388,16 @@ def create_app(
             if allowed and env_name not in allowed:
                 continue
             key = (
-                skills_loader.secret_key_for(name, env_name)
+                skills_loader.secret_key_for(safe_name, env_name)
                 if hasattr(skills_loader, "secret_key_for")
-                else f"skill:{name}:env:{env_name}"
+                else f"skill:{safe_name}:env:{env_name}"
             )
             if value is None or str(value).strip() == "":
                 secret_store.delete(key)
             else:
                 secret_store.set(key, str(value))
 
-        return await api_get_skill_secrets(name)
+        return await api_get_skill_secrets(safe_name)
 
     @app.post("/api/skills/install", dependencies=[Depends(auth)])
     async def api_install_skill(body: dict):
@@ -381,8 +412,8 @@ def create_app(
             # Local path
             src_path = Path(source).expanduser()
             if src_path.exists():
-                name = body.get("name") or src_path.name
-                dest = target_root / name
+                name = _normalize_safe_name(body.get("name") or src_path.name, kind="skill")
+                dest = _resolve_child_path(target_root, name, kind="skill")
                 if dest.exists():
                     shutil.rmtree(dest)
                 shutil.copytree(src_path, dest)
@@ -400,8 +431,11 @@ def create_app(
             if source.startswith("http") or source.endswith(".git"):
                 with tempfile.TemporaryDirectory() as tmp:
                     subprocess.run(["git", "clone", source, tmp], check=True, capture_output=True)
-                    name = body.get("name") or Path(source).stem.replace(".git", "")
-                    dest = target_root / name
+                    name = _normalize_safe_name(
+                        body.get("name") or Path(source).stem.replace(".git", ""),
+                        kind="skill",
+                    )
+                    dest = _resolve_child_path(target_root, name, kind="skill")
                     if dest.exists():
                         shutil.rmtree(dest)
                     shutil.copytree(tmp, dest, ignore=shutil.ignore_patterns(".git"))
@@ -415,8 +449,8 @@ def create_app(
                         )
                     return {"ok": True, "name": name, "status": status}
         except Exception as e:
-            return {"error": str(e)}
-        return {"error": "invalid source"}
+            return JSONResponse({"error": str(e)}, status_code=400)
+        return JSONResponse({"error": "invalid source"}, status_code=400)
 
     @app.get("/api/plugins", dependencies=[Depends(auth)])
     async def api_list_plugins():
@@ -439,7 +473,10 @@ def create_app(
 
     @app.delete("/api/plugins/{name}", dependencies=[Depends(auth)])
     async def api_remove_plugin(name: str):
-        ok = plugin_manager.remove(name)
+        try:
+            ok = plugin_manager.remove(name)
+        except PluginValidationError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
         return {"ok": ok}
 
     @app.get("/api/workflows", dependencies=[Depends(auth)])
@@ -480,8 +517,12 @@ def create_app(
     async def api_delete_skill(name: str):
         if not skills_loader:
             return {"error": "skills not available"}
+        try:
+            safe_name = _normalize_safe_name(name, kind="skill")
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
         target_root = Path(skills_loader.workspace) / "skills"
-        dest = target_root / name
+        dest = _resolve_child_path(target_root, safe_name, kind="skill")
         if dest.exists():
             shutil.rmtree(dest)
             if hasattr(skills_loader, "invalidate_cache"):

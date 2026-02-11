@@ -9,8 +9,10 @@ from miniclaw.agent.tools.base import Tool
 def _resolve_path(path: str, allowed_dir: Path | None = None) -> Path:
     """Resolve path and optionally enforce directory restriction."""
     resolved = Path(path).expanduser().resolve()
-    if allowed_dir and not str(resolved).startswith(str(allowed_dir.resolve())):
-        raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
+    if allowed_dir:
+        allowed_root = allowed_dir.expanduser().resolve()
+        if resolved != allowed_root and allowed_root not in resolved.parents:
+            raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
 
 

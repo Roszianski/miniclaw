@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ class PluginManager:
     """Install/list/remove plugins with manifest and permission checks."""
 
     MANIFEST_FILES = ("plugin.yaml", "plugin.yml", "plugin.json")
+    NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
     def __init__(self, *, workspace: Path, config: Any):
         self.workspace = workspace
@@ -58,14 +60,12 @@ class PluginManager:
                 raise PluginValidationError("plugin manifest is required (plugin.yaml/yml/json).")
 
             manifest = self._load_manifest(manifest_path) if manifest_path else {}
-            plugin_name = str(name or manifest.get("name") or staged.name).strip()
-            if not plugin_name:
-                raise PluginValidationError("plugin name is required")
+            plugin_name = self._normalize_plugin_name(name or manifest.get("name") or staged.name)
 
             permissions = self._extract_permissions(manifest)
             self._validate_signature_policy(staged, manifest)
 
-            target = self.plugins_dir / plugin_name
+            target = self._resolve_plugin_target(plugin_name)
             if target.exists():
                 shutil.rmtree(target)
             shutil.copytree(staged, target)
@@ -78,11 +78,29 @@ class PluginManager:
             }
 
     def remove(self, name: str) -> bool:
-        target = self.plugins_dir / str(name)
+        plugin_name = self._normalize_plugin_name(name)
+        target = self._resolve_plugin_target(plugin_name)
         if not target.exists():
             return False
         shutil.rmtree(target)
         return True
+
+    def _normalize_plugin_name(self, value: Any) -> str:
+        name = str(value or "").strip()
+        if not name:
+            raise PluginValidationError("plugin name is required")
+        if not self.NAME_PATTERN.fullmatch(name):
+            raise PluginValidationError(
+                "invalid plugin name (allowed: letters, numbers, dot, underscore, hyphen)"
+            )
+        return name
+
+    def _resolve_plugin_target(self, plugin_name: str) -> Path:
+        base = self.plugins_dir.expanduser().resolve()
+        target = (base / plugin_name).resolve()
+        if target != base and base not in target.parents:
+            raise PluginValidationError("plugin target resolves outside plugins directory.")
+        return target
 
     def _stage_source(self, *, source: str, temp_root: Path) -> Path:
         maybe_local = Path(source).expanduser()

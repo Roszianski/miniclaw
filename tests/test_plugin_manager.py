@@ -52,3 +52,42 @@ def test_plugin_policy_enforcement(tmp_path: Path) -> None:
     manager = PluginManager(workspace=workspace, config=config.plugins)
     with pytest.raises(PluginValidationError):
         manager.install(str(source))
+
+
+def test_plugin_name_rejects_path_traversal_and_invalid_values(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    source = tmp_path / "plugin-src"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "plugin.json").write_text(json.dumps({"name": "demo"}), encoding="utf-8")
+
+    config = Config()
+    manager = PluginManager(workspace=workspace, config=config.plugins)
+
+    with pytest.raises(PluginValidationError):
+        manager.install(str(source), name="..")
+    with pytest.raises(PluginValidationError):
+        manager.install(str(source), name="../evil")
+
+    outside = workspace / "keep.txt"
+    outside.write_text("safe", encoding="utf-8")
+    with pytest.raises(PluginValidationError):
+        manager.remove("..")
+    assert outside.exists()
+
+
+def test_plugin_manifest_name_cannot_escape_plugins_dir(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    source = tmp_path / "plugin-src"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "plugin.json").write_text(
+        json.dumps({"name": "../escape", "permissions": []}),
+        encoding="utf-8",
+    )
+
+    config = Config()
+    manager = PluginManager(workspace=workspace, config=config.plugins)
+    with pytest.raises(PluginValidationError):
+        manager.install(str(source))

@@ -8,6 +8,7 @@ import hmac
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -273,8 +274,13 @@ class EncryptedFileBackend:
         self.namespace = namespace
         self.data_dir = self.home / ".miniclaw"
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.secrets_file = self.data_dir / "secrets.enc.json"
-        self.key_file = self.data_dir / "secrets.key"
+        namespace_slug = self._namespace_slug(namespace)
+        if namespace_slug == "miniclaw":
+            self.secrets_file = self.data_dir / "secrets.enc.json"
+            self.key_file = self.data_dir / "secrets.key"
+        else:
+            self.secrets_file = self.data_dir / f"secrets.{namespace_slug}.enc.json"
+            self.key_file = self.data_dir / f"secrets.{namespace_slug}.key"
         self.backend_name = "encrypted_file"
         self._master_key = self._load_master_key()
 
@@ -340,7 +346,7 @@ class EncryptedFileBackend:
         plaintext = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         salt = os.urandom(16)
         nonce = os.urandom(16)
-        key = hashlib.scrypt(self._master_key, salt=salt, n=2**14, r=8, p=1, dklen=32)
+        key = self._derive_key(salt=salt)
         ciphertext = self._xor_stream(plaintext, key=key, nonce=nonce)
         tag = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
         return {
@@ -359,13 +365,26 @@ class EncryptedFileBackend:
         nonce = base64.b64decode(payload["nonce"])
         ciphertext = base64.b64decode(payload["ciphertext"])
         tag = base64.b64decode(payload["tag"])
-        key = hashlib.scrypt(self._master_key, salt=salt, n=2**14, r=8, p=1, dklen=32)
+        key = self._derive_key(salt=salt)
         expected = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
         if not hmac.compare_digest(tag, expected):
             return {}
         plaintext = self._xor_stream(ciphertext, key=key, nonce=nonce)
         data = json.loads(plaintext.decode("utf-8"))
         return data if isinstance(data, dict) else {}
+
+    @staticmethod
+    def _namespace_slug(namespace: str) -> str:
+        raw = str(namespace or "miniclaw").strip().lower()
+        slug = re.sub(r"[^a-z0-9._-]+", "-", raw).strip("-._")
+        return slug or "miniclaw"
+
+    def _derive_key(self, *, salt: bytes) -> bytes:
+        scrypt_fn = getattr(hashlib, "scrypt", None)
+        if callable(scrypt_fn):
+            return scrypt_fn(self._master_key, salt=salt, n=2**14, r=8, p=1, dklen=32)
+        # Fallback for constrained Python/OpenSSL builds where scrypt is unavailable.
+        return hashlib.pbkdf2_hmac("sha256", self._master_key, salt, 200_000, dklen=32)
 
     @staticmethod
     def _xor_stream(data: bytes, *, key: bytes, nonce: bytes) -> bytes:

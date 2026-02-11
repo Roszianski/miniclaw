@@ -509,6 +509,7 @@ class LinearWorkflowRuntime:
         response = await self.bus.wait_for_response(
             self.approval_session_key,
             timeout=self.approval_timeout_s,
+            approval_id=approval_id,
         )
         decision = str(response or "").strip().lower()
         approved = decision in {"approve", "approved", "yes", "y", "ok", "continue", "allow"}
